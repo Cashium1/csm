@@ -32,6 +32,7 @@ type CartRow = CourseRow & {
 };
 
 type PaymentRow = CourseRow & {
+  payment_id: string;
   purchased_at: string;
 };
 
@@ -49,6 +50,7 @@ export type CartCourseItem = Course & {
 };
 
 export type PaymentHistoryItem = Course & {
+  id: string;
   purchasedAt: string;
 };
 
@@ -233,10 +235,12 @@ export function getCartCoursesForUser(userId: string) {
     `)
     .all(userId) as CartRow[];
 
-  return rows.map((row) => ({
-    ...rowToCourse(row),
-    cartedAt: row.carted_at,
-  }));
+  return rows
+    .map((row): CartCourseItem | null => {
+      const course = rowToCourse(row);
+      return course ? { ...course, cartedAt: row.carted_at } : null;
+    })
+    .filter((item): item is CartCourseItem => item !== null);
 }
 
 export function getInProgressCoursesForUser(userId: string) {
@@ -278,11 +282,12 @@ export function getInProgressCoursesForUser(userId: string) {
     `)
     .all(userId, userId) as CourseStateRow[];
 
-  return rows.map((row) => ({
-    ...rowToCourse(row),
-    stateAt: row.state_at,
-    accessType: row.access_type,
-  }));
+  return rows
+    .map((row): CourseListItem | null => {
+      const course = rowToCourse(row);
+      return course ? { ...course, stateAt: row.state_at, accessType: row.access_type } : null;
+    })
+    .filter((item): item is CourseListItem => item !== null);
 }
 
 export function getCompletedCoursesForUser(userId: string) {
@@ -300,10 +305,12 @@ export function getCompletedCoursesForUser(userId: string) {
     `)
     .all(userId) as CourseStateRow[];
 
-  return rows.map((row) => ({
-    ...rowToCourse(row),
-    stateAt: row.state_at,
-  }));
+  return rows
+    .map((row): CourseListItem | null => {
+      const course = rowToCourse(row);
+      return course ? { ...course, stateAt: row.state_at } : null;
+    })
+    .filter((item): item is CourseListItem => item !== null);
 }
 
 export function getPaymentHistoryForUser(userId: string) {
@@ -313,6 +320,7 @@ export function getPaymentHistoryForUser(userId: string) {
     .prepare(`
       SELECT
         c.*,
+        cp.id AS payment_id,
         cp.purchased_at
       FROM course_purchases cp
       INNER JOIN courses c ON c.slug = cp.course_slug
@@ -321,10 +329,12 @@ export function getPaymentHistoryForUser(userId: string) {
     `)
     .all(userId) as PaymentRow[];
 
-  return rows.map((row) => ({
-    ...rowToCourse(row),
-    purchasedAt: row.purchased_at,
-  }));
+  return rows
+    .map((row): PaymentHistoryItem | null => {
+      const course = rowToCourse(row);
+      return course ? { ...course, id: row.payment_id, purchasedAt: row.purchased_at } : null;
+    })
+    .filter((item): item is PaymentHistoryItem => item !== null);
 }
 
 function hasActiveCourseRecord(userId: string, courseSlug: string) {
@@ -344,11 +354,12 @@ function hasActiveCourseRecord(userId: string, courseSlug: string) {
   return Boolean(row);
 }
 
-function rowToCourse(row: CourseRow): Course {
+function rowToCourse(row: CourseRow): Course | null {
   const sourceCourse = getCourse(row.slug);
 
+  // 카탈로그에서 제거된 과거 강의는 건너뜁니다.
   if (!sourceCourse) {
-    throw new Error(`Unknown course row: ${row.slug}`);
+    return null;
   }
 
   return {

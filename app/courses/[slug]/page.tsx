@@ -111,7 +111,6 @@ export default async function CourseDetailPage({ params }: CourseDetailPageProps
             <CourseActionButton
               courseSlug={course.slug}
               courseTitle={course.title}
-              materialPdf={course.materialPdf}
               isFree={isFree}
               hasAccess={hasAccess}
             />
@@ -217,7 +216,6 @@ export default async function CourseDetailPage({ params }: CourseDetailPageProps
                     <CourseActionButton
                       courseSlug={course.slug}
                       courseTitle={course.title}
-                      materialPdf={course.materialPdf}
                       isFree={isFree}
                       hasAccess={false}
                     />

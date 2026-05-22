@@ -119,6 +119,33 @@ function initializeSchema(database: DatabaseSync) {
       UNIQUE(user_id, course_slug)
     );
 
+    CREATE TABLE IF NOT EXISTS email_verifications (
+      id TEXT PRIMARY KEY,
+      email TEXT NOT NULL COLLATE NOCASE,
+      code_hash TEXT NOT NULL,
+      expires_at TEXT NOT NULL,
+      consumed_at TEXT,
+      attempts INTEGER NOT NULL DEFAULT 0,
+      created_at TEXT NOT NULL
+    );
+
+    CREATE TABLE IF NOT EXISTS orders (
+      id TEXT PRIMARY KEY,
+      user_id TEXT NOT NULL,
+      course_slug TEXT NOT NULL,
+      order_name TEXT NOT NULL,
+      amount INTEGER NOT NULL,
+      status TEXT NOT NULL DEFAULT 'pending',
+      payment_key TEXT,
+      method TEXT,
+      receipt_url TEXT,
+      approved_at TEXT,
+      fail_reason TEXT,
+      created_at TEXT NOT NULL,
+      updated_at TEXT NOT NULL,
+      FOREIGN KEY (user_id) REFERENCES "USER"(id) ON DELETE CASCADE
+    );
+
     CREATE INDEX IF NOT EXISTS idx_user_sessions_token_hash
       ON user_sessions(token_hash);
 
@@ -157,5 +184,11 @@ function initializeSchema(database: DatabaseSync) {
 
     CREATE INDEX IF NOT EXISTS idx_course_reviews_user_id
       ON course_reviews(user_id);
+
+    CREATE INDEX IF NOT EXISTS idx_email_verifications_email
+      ON email_verifications(email);
+
+    CREATE INDEX IF NOT EXISTS idx_orders_user_id
+      ON orders(user_id);
   `);
 }

@@ -1,4 +1,5 @@
 import Link from "next/link";
+import Image from "next/image";
 import { HeaderAuthControls } from "@/components/header-auth-controls";
 
 const navItems = [
@@ -13,9 +14,7 @@ export function SiteHeader() {
     <header className="sticky top-0 z-50 border-b border-zinc-200/80 bg-white/90 backdrop-blur">
       <div className="mx-auto flex max-w-6xl items-center justify-between gap-4 px-4 py-3 sm:px-6 lg:px-8">
         <Link href="/" className="flex items-center gap-2" aria-label="캐쉬움 홈">
-          <span className="flex h-9 w-9 items-center justify-center rounded-lg bg-[#ffd84d] text-sm font-black text-zinc-950 shadow-sm">
-            캐
-          </span>
+          <Image src="/logo.png" alt="" width={141} height={139} className="h-9 w-auto" priority />
           <span className="text-lg font-extrabold tracking-tight text-zinc-950">캐쉬움</span>
         </Link>
 

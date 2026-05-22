@@ -7,7 +7,6 @@ import { useState } from "react";
 type CourseActionButtonProps = {
   courseSlug: string;
   courseTitle: string;
-  materialPdf: string;
   isFree: boolean;
   hasAccess: boolean;
 };
@@ -16,7 +15,7 @@ type EnrollResponse = {
   message?: string;
 };
 
-export function CourseActionButton({ courseSlug, courseTitle, materialPdf, isFree, hasAccess }: CourseActionButtonProps) {
+export function CourseActionButton({ courseSlug, courseTitle, isFree, hasAccess }: CourseActionButtonProps) {
   const router = useRouter();
   const [hasLocalAccess, setHasLocalAccess] = useState(hasAccess);
   const [isViewerOpen, setIsViewerOpen] = useState(false);
@@ -60,8 +59,8 @@ export function CourseActionButton({ courseSlug, courseTitle, materialPdf, isFre
         </button>
         {isViewerOpen ? (
           <PdfMiniViewer
+            courseSlug={courseSlug}
             courseTitle={courseTitle}
-            materialPdf={materialPdf}
             onClose={() => setIsViewerOpen(false)}
           />
         ) : null}
@@ -96,30 +95,41 @@ export function CourseActionButton({ courseSlug, courseTitle, materialPdf, isFre
 }
 
 function PdfMiniViewer({
+  courseSlug,
   courseTitle,
-  materialPdf,
   onClose,
 }: {
+  courseSlug: string;
   courseTitle: string;
-  materialPdf: string;
   onClose: () => void;
 }) {
+  const materialUrl = `/api/courses/${courseSlug}/material`;
+  const [isExpanded, setIsExpanded] = useState(false);
+
   return (
-    <div className="fixed inset-0 z-[80] flex items-center justify-center bg-zinc-950/70 px-4 py-6">
-      <div className="flex h-full max-h-[760px] w-full max-w-5xl flex-col overflow-hidden rounded-lg bg-white shadow-[0_24px_80px_rgba(0,0,0,0.35)]">
+    <div
+      className={`fixed inset-0 z-[80] flex items-center justify-center bg-zinc-950/70 ${
+        isExpanded ? "p-0" : "px-4 py-6"
+      }`}
+    >
+      <div
+        className={`flex h-full w-full flex-col overflow-hidden bg-white shadow-[0_24px_80px_rgba(0,0,0,0.35)] ${
+          isExpanded ? "max-h-none max-w-none rounded-none" : "max-h-[760px] max-w-5xl rounded-lg"
+        }`}
+      >
         <div className="flex items-center justify-between gap-3 border-b border-zinc-200 px-4 py-3">
           <div className="min-w-0">
             <p className="truncate text-sm font-black text-zinc-950">{courseTitle}</p>
             <p className="text-xs font-bold text-zinc-500">PDF 강의 자료</p>
           </div>
           <div className="flex shrink-0 items-center gap-2">
-            <Link
-              href={materialPdf}
-              target="_blank"
+            <button
+              type="button"
+              onClick={() => setIsExpanded((prev) => !prev)}
               className="rounded-full border border-zinc-300 px-3 py-2 text-xs font-extrabold text-zinc-700 transition hover:border-zinc-950"
             >
-              새 창
-            </Link>
+              {isExpanded ? "화면 줄이기" : "화면 늘리기"}
+            </button>
             <button
               type="button"
               onClick={onClose}
@@ -131,7 +141,7 @@ function PdfMiniViewer({
         </div>
         <iframe
           title={`${courseTitle} PDF 미니 뷰어`}
-          src={`${materialPdf}#toolbar=0&navpanes=0`}
+          src={`${materialUrl}#toolbar=0&navpanes=0`}
           className="min-h-0 flex-1 bg-zinc-100"
         />
       </div>

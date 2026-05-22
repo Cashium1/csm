@@ -133,6 +133,85 @@ export function createUser(email: string, password: string, name: string) {
   };
 }
 
+// 이미 가입된 이메일인지 확인합니다.
+export function isEmailTaken(email: string) {
+  return Boolean(findUserByEmail(email.trim().toLowerCase()));
+}
+
+type ProfileUpdateErrors = {
+  name?: string;
+  email?: string;
+  password?: string;
+};
+
+export function updateUser(
+  userId: string,
+  values: { name?: unknown; email?: unknown; password?: unknown },
+):
+  | { ok: true; user: { id: string; name: string; email: string } }
+  | { ok: false; errors: ProfileUpdateErrors } {
+  const name = typeof values.name === "string" ? values.name.trim() : "";
+  const email = typeof values.email === "string" ? values.email.trim().toLowerCase() : "";
+  const password = typeof values.password === "string" ? values.password : "";
+
+  const errors: ProfileUpdateErrors = {};
+
+  if (!name) {
+    errors.name = "이름을 입력해 주세요.";
+  } else if (name.length > 30) {
+    errors.name = "이름은 30자 이하로 입력해 주세요.";
+  }
+
+  if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
+    errors.email = "올바른 이메일을 입력해 주세요.";
+  }
+
+  if (password && password.length < 8) {
+    errors.password = "비밀번호는 8자 이상이어야 합니다.";
+  }
+
+  if (Object.keys(errors).length > 0) {
+    return { ok: false, errors };
+  }
+
+  const database = getDatabase();
+  const duplicate = database
+    .prepare(`SELECT id FROM "USER" WHERE email = ? AND id != ? LIMIT 1`)
+    .get(email, userId) as { id: string } | undefined;
+
+  if (duplicate) {
+    return { ok: false, errors: { email: "이미 사용 중인 이메일입니다." } };
+  }
+
+  const now = new Date().toISOString();
+
+  if (password) {
+    const { passwordHash, passwordSalt } = hashPassword(password);
+    database
+      .prepare(`
+        UPDATE "USER"
+        SET name = ?, email = ?, password_hash = ?, password_salt = ?, updated_at = ?
+        WHERE id = ?
+      `)
+      .run(name, email, passwordHash, passwordSalt, now, userId);
+  } else {
+    database
+      .prepare(`
+        UPDATE "USER"
+        SET name = ?, email = ?, updated_at = ?
+        WHERE id = ?
+      `)
+      .run(name, email, now, userId);
+  }
+
+  return { ok: true, user: { id: userId, name, email } };
+}
+
+export function deleteUser(userId: string) {
+  // user_sessions, course_purchases 등은 FK ON DELETE CASCADE로 함께 삭제됩니다.
+  getDatabase().prepare(`DELETE FROM "USER" WHERE id = ?`).run(userId);
+}
+
 export function authenticateUser(email: string, password: string) {
   const user = findUserByEmail(email);
 
@@ -141,6 +220,23 @@ export function authenticateUser(email: string, password: string) {
   }
 
   return toPublicUser(user);
+}
+
+// 특정 사용자의 비밀번호가 맞는지 확인합니다. (회원정보 수정 전 본인 확인용)
+export function verifyUserPassword(userId: string, password: string) {
+  if (typeof password !== "string" || password.length === 0) {
+    return false;
+  }
+
+  const row = getDatabase()
+    .prepare(`SELECT password_hash, password_salt FROM "USER" WHERE id = ? LIMIT 1`)
+    .get(userId) as { password_hash: string; password_salt: string } | undefined;
+
+  if (!row) {
+    return false;
+  }
+
+  return verifyPassword(password, row.password_hash, row.password_salt);
 }
 
 export function createSession(userId: string) {

@@ -1,10 +1,42 @@
 import Link from "next/link";
+import type { ReactNode } from "react";
+import { getCurrentUser } from "@/lib/auth";
 import { courses, getCourse } from "@/lib/data";
+import { hasCourseAccess } from "@/lib/purchases";
+import { getTossClientKey } from "@/lib/toss";
 import { CheckoutButton } from "./checkout-button";
+
+export const runtime = "nodejs";
+export const dynamic = "force-dynamic";
 
 type CheckoutPageProps = {
   searchParams: Promise<{ course?: string | string[] }>;
 };
+
+const primaryLink =
+  "rounded-full bg-zinc-950 px-5 py-3 text-sm font-extrabold text-white transition hover:bg-zinc-800";
+const secondaryLink =
+  "rounded-full border border-zinc-300 bg-white px-5 py-3 text-sm font-extrabold text-zinc-700 transition hover:border-zinc-950";
+
+function CheckoutNotice({
+  title,
+  description,
+  children,
+}: {
+  title: string;
+  description?: string;
+  children: ReactNode;
+}) {
+  return (
+    <section className="bg-zinc-50 py-16">
+      <div className="mx-auto max-w-xl px-4 text-center sm:px-6">
+        <h1 className="text-2xl font-black text-zinc-950">{title}</h1>
+        {description ? <p className="mt-3 text-sm leading-6 text-zinc-600">{description}</p> : null}
+        <div className="mt-6 flex flex-wrap justify-center gap-2">{children}</div>
+      </div>
+    </section>
+  );
+}
 
 export default async function CheckoutPage({ searchParams }: CheckoutPageProps) {
   const params = await searchParams;
@@ -13,16 +45,44 @@ export default async function CheckoutPage({ searchParams }: CheckoutPageProps) 
 
   if (!course) {
     return (
-      <section className="bg-zinc-50 py-16">
-        <div className="mx-auto max-w-xl px-4 text-center sm:px-6">
-          <h1 className="text-2xl font-black text-zinc-950">상품을 찾을 수 없습니다</h1>
-          <Link href="/courses" className="mt-6 inline-flex rounded-full bg-zinc-950 px-5 py-3 text-sm font-bold text-white">
-            강의 목록으로 이동
-          </Link>
-        </div>
-      </section>
+      <CheckoutNotice title="상품을 찾을 수 없습니다">
+        <Link href="/courses" className={primaryLink}>
+          강의 목록으로 이동
+        </Link>
+      </CheckoutNotice>
     );
   }
+
+  if (course.priceNumber === 0) {
+    return (
+      <CheckoutNotice
+        title="무료 강의입니다"
+        description="이 강의는 결제 없이 강의 페이지에서 바로 수강 신청할 수 있습니다."
+      >
+        <Link href={`/courses/${course.slug}`} className={primaryLink}>
+          강의 페이지로 이동
+        </Link>
+      </CheckoutNotice>
+    );
+  }
+
+  const user = await getCurrentUser();
+  const owned = user ? hasCourseAccess(user.id, course.slug) : false;
+
+  if (owned) {
+    return (
+      <CheckoutNotice title="이미 보유 중인 강의입니다" description="마이페이지에서 학습 자료를 확인하세요.">
+        <Link href={`/courses/${course.slug}`} className={primaryLink}>
+          강의 보기
+        </Link>
+        <Link href="/mypage" className={secondaryLink}>
+          마이페이지
+        </Link>
+      </CheckoutNotice>
+    );
+  }
+
+  const clientKey = getTossClientKey();
 
   return (
     <section className="bg-zinc-50 py-12 sm:py-16">
@@ -56,9 +116,25 @@ export default async function CheckoutPage({ searchParams }: CheckoutPageProps) 
             <span className="text-sm font-bold text-zinc-600">결제 금액</span>
             <span className="text-2xl font-black text-zinc-950">{course.price}</span>
           </div>
-          <CheckoutButton courseSlug={course.slug} />
+
+          {!user ? (
+            <Link
+              href="/login"
+              className="mt-5 block w-full rounded-full bg-zinc-950 px-5 py-4 text-center text-sm font-black text-white transition hover:bg-zinc-800"
+            >
+              로그인 후 결제하기
+            </Link>
+          ) : !clientKey ? (
+            <p className="mt-5 rounded-lg border border-amber-200 bg-amber-50 p-3 text-xs font-bold leading-5 text-amber-800">
+              결제 키(NEXT_PUBLIC_TOSS_CLIENT_KEY)가 설정되지 않았습니다. 환경변수를 설정한 뒤 다시
+              시도해 주세요.
+            </p>
+          ) : (
+            <CheckoutButton courseSlug={course.slug} clientKey={clientKey} />
+          )}
+
           <p className="mt-4 text-xs leading-5 text-zinc-500">
-            현재 화면은 MVP용 결제 UI입니다. 버튼을 누르면 결제 완료 상태로 처리됩니다.
+            토스페이먼츠로 안전하게 결제됩니다. 결제 완료 후 마이페이지에서 자료를 확인할 수 있습니다.
           </p>
         </aside>
       </div>

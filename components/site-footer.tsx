@@ -1,4 +1,5 @@
 import Link from "next/link";
+import Image from "next/image";
 
 const footerLinks = [
   { href: "/notices", label: "공지사항" },
@@ -15,9 +16,7 @@ export function SiteFooter() {
         <div className="flex flex-col gap-4 md:flex-row md:items-start md:justify-between">
           <div>
             <div className="flex items-center gap-2">
-              <span className="flex h-8 w-8 items-center justify-center rounded-lg bg-[#ffd84d] text-xs font-black text-zinc-950">
-                캐
-              </span>
+              <Image src="/logo.png" alt="" width={141} height={139} className="h-8 w-auto" />
               <span className="text-lg font-extrabold text-zinc-950">캐쉬움</span>
             </div>
             <p className="mt-3 max-w-md text-sm leading-6 text-zinc-600">
