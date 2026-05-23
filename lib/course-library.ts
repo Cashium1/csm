@@ -79,24 +79,7 @@ export function syncCoursesToDatabase() {
       updated_at
     )
     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-    ON CONFLICT(slug) DO UPDATE SET
-      title = excluded.title,
-      category = excluded.category,
-      group_key = excluded.group_key,
-      summary = excluded.summary,
-      level = excluded.level,
-      duration = excluded.duration,
-      minutes = excluded.minutes,
-      price = excluded.price,
-      price_number = excluded.price_number,
-      thumbnail = excluded.thumbnail,
-      material_pdf = excluded.material_pdf,
-      badge = excluded.badge,
-      card_category = excluded.card_category,
-      original_price = excluded.original_price,
-      rating = excluded.rating,
-      review_count = excluded.review_count,
-      updated_at = excluded.updated_at
+    ON CONFLICT(slug) DO NOTHING
   `);
 
   for (const course of courses) {

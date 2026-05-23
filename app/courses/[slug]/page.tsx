@@ -2,10 +2,11 @@ import Link from "next/link";
 import Image from "next/image";
 import { notFound } from "next/navigation";
 import { CourseCard } from "@/components/course-card";
-import { getCurrentUser } from "@/lib/auth";
+import { getCurrentUser, isAdmin } from "@/lib/auth";
 import { hasCartedCourse } from "@/lib/course-library";
 import { getCourseReviews, getUserCourseReview } from "@/lib/course-reviews";
 import { courses, getCourse, getRelatedCourses } from "@/lib/data";
+import { getDatabase } from "@/lib/db";
 import { hasCourseAccess } from "@/lib/purchases";
 import { CourseActionButton } from "./course-action-button";
 import { CourseCartButton } from "./course-cart-button";
@@ -52,8 +53,17 @@ export default async function CourseDetailPage({ params }: CourseDetailPageProps
     notFound();
   }
 
-  const relatedCourses = getRelatedCourses(course.relatedSlugs);
   const user = await getCurrentUser();
+
+  // 관리자가 비공개로 설정한 강의는 공개 페이지에서 숨깁니다. (관리자는 미리보기 가능)
+  const publishedRow = getDatabase()
+    .prepare(`SELECT is_published FROM courses WHERE slug = ?`)
+    .get(slug) as { is_published: number } | undefined;
+  if (publishedRow && publishedRow.is_published === 0 && !isAdmin(user)) {
+    notFound();
+  }
+
+  const relatedCourses = getRelatedCourses(course.relatedSlugs);
   const hasAccess = user ? hasCourseAccess(user.id, slug) : false;
   const isCarted = user ? hasCartedCourse(user.id, slug) : false;
   const isFree = course.priceNumber === 0;

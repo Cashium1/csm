@@ -8,6 +8,7 @@ export type CourseReview = {
   userName: string;
   rating: number;
   content: string;
+  status: string;
   createdAt: string;
   updatedAt: string;
 };
@@ -19,6 +20,7 @@ type ReviewRow = {
   user_name: string;
   rating: number;
   content: string;
+  status: string;
   created_at: string;
   updated_at: string;
 };
@@ -43,11 +45,13 @@ export function getCourseReviews(courseSlug: string) {
         u.name AS user_name,
         r.rating,
         r.content,
+        r.status,
         r.created_at,
         r.updated_at
       FROM course_reviews r
       INNER JOIN "USER" u ON u.id = r.user_id
       WHERE r.course_slug = ?
+        AND r.status = 'visible'
       ORDER BY r.updated_at DESC
     `)
     .all(courseSlug) as ReviewRow[];
@@ -65,11 +69,13 @@ export function getUserCourseReview(courseSlug: string, userId: string) {
         u.name AS user_name,
         r.rating,
         r.content,
+        r.status,
         r.created_at,
         r.updated_at
       FROM course_reviews r
       INNER JOIN "USER" u ON u.id = r.user_id
       WHERE r.course_slug = ?
+        AND r.status = 'visible'
         AND r.user_id = ?
       LIMIT 1
     `)
@@ -144,6 +150,7 @@ function toCourseReview(row: ReviewRow): CourseReview {
     userName: row.user_name,
     rating: row.rating,
     content: row.content,
+    status: row.status ?? "visible",
     createdAt: row.created_at,
     updatedAt: row.updated_at,
   };

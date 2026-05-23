@@ -12,14 +12,15 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ message: "입력값을 확인해 주세요.", errors }, { status: 400 });
   }
 
-  const user = authenticateUser(email, password);
+  const auth = authenticateUser(email, password);
 
-  if (!user) {
-    return NextResponse.json({ message: "이메일 또는 비밀번호를 확인해 주세요." }, { status: 401 });
+  if (!auth.ok) {
+    const status = auth.reason === "invalid" ? 401 : 403;
+    return NextResponse.json({ message: auth.message }, { status });
   }
 
-  const token = createSession(user.id);
-  const response = NextResponse.json({ user });
+  const token = createSession(auth.user.id);
+  const response = NextResponse.json({ user: auth.user });
   attachSessionCookie(response, token);
 
   return response;

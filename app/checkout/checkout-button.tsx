@@ -1,7 +1,7 @@
 "use client";
 
 import { useRouter } from "next/navigation";
-import { useState } from "react";
+import { SyntheticEvent, useState } from "react";
 
 type RequestPaymentParams = {
   method: string;
@@ -57,9 +57,20 @@ type CreateOrderResponse = {
   orderId?: string;
   orderName?: string;
   amount?: number;
+  originalAmount?: number;
+  appliedCoupon?: { code: string; discountAmount: number } | null;
   customerKey?: string;
   customerEmail?: string;
   customerName?: string;
+};
+
+type CouponValidationResponse = {
+  ok?: boolean;
+  message?: string;
+  couponCode?: string;
+  couponName?: string;
+  discountAmount?: number;
+  finalAmount?: number;
 };
 
 export function CheckoutButton({
@@ -72,17 +83,70 @@ export function CheckoutButton({
   const router = useRouter();
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [message, setMessage] = useState("");
+  const [couponInput, setCouponInput] = useState("");
+  const [couponState, setCouponState] = useState<{
+    code: string;
+    discountAmount: number;
+    finalAmount: number;
+  } | null>(null);
+  const [isCouponBusy, setIsCouponBusy] = useState(false);
+  const [couponNotice, setCouponNotice] = useState<{ text: string; tone: "ok" | "error" } | null>(
+    null,
+  );
+
+  async function applyCoupon(event: SyntheticEvent<HTMLFormElement>) {
+    event.preventDefault();
+    if (!couponInput.trim()) {
+      setCouponNotice({ text: "쿠폰 코드를 입력해 주세요.", tone: "error" });
+      return;
+    }
+    setIsCouponBusy(true);
+    setCouponNotice(null);
+
+    const response = await fetch("/api/coupons/validate", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ code: couponInput.trim(), courseSlug }),
+    });
+    const data = (await response.json().catch(() => ({}))) as CouponValidationResponse;
+    setIsCouponBusy(false);
+
+    if (!response.ok || !data.ok) {
+      setCouponNotice({ text: data.message ?? "쿠폰을 적용할 수 없습니다.", tone: "error" });
+      setCouponState(null);
+      return;
+    }
+
+    setCouponState({
+      code: data.couponCode ?? couponInput,
+      discountAmount: data.discountAmount ?? 0,
+      finalAmount: data.finalAmount ?? 0,
+    });
+    setCouponNotice({
+      text: `${(data.discountAmount ?? 0).toLocaleString("ko-KR")}원 할인이 적용되었습니다.`,
+      tone: "ok",
+    });
+  }
+
+  function clearCoupon() {
+    setCouponInput("");
+    setCouponState(null);
+    setCouponNotice(null);
+  }
 
   async function handleCheckout() {
     setIsSubmitting(true);
     setMessage("");
 
     try {
-      // 1) 서버에서 주문을 생성하고 확정 금액을 받습니다.
+      // 1) 서버에서 주문을 생성하고 확정 금액을 받습니다. (쿠폰이 있으면 서버에서 재검증·기록)
       const response = await fetch("/api/checkout/create-order", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ courseSlug }),
+        body: JSON.stringify({
+          courseSlug,
+          couponCode: couponState ? couponState.code : null,
+        }),
       });
 
       if (response.status === 401) {
@@ -130,13 +194,56 @@ export function CheckoutButton({
 
   return (
     <>
+      <form onSubmit={applyCoupon} className="mt-5 space-y-2 rounded-lg border border-zinc-200 bg-zinc-50 p-3">
+        <p className="text-xs font-extrabold text-zinc-600">쿠폰 코드</p>
+        <div className="flex gap-2">
+          <input
+            value={couponInput}
+            onChange={(e) => setCouponInput(e.target.value)}
+            disabled={Boolean(couponState)}
+            placeholder="WELCOME10"
+            className="min-w-0 flex-1 rounded-lg border border-zinc-300 bg-white px-3 py-2 font-mono text-sm outline-none focus:border-[#f2c230] disabled:bg-zinc-100"
+          />
+          {couponState ? (
+            <button
+              type="button"
+              onClick={clearCoupon}
+              className="shrink-0 rounded-lg border border-zinc-300 bg-white px-3 text-xs font-extrabold text-zinc-700 transition hover:border-zinc-950"
+            >
+              해제
+            </button>
+          ) : (
+            <button
+              type="submit"
+              disabled={isCouponBusy}
+              className="shrink-0 rounded-lg bg-zinc-950 px-4 text-xs font-extrabold text-white transition hover:bg-zinc-800 disabled:cursor-not-allowed disabled:bg-zinc-400"
+            >
+              {isCouponBusy ? "확인 중..." : "적용"}
+            </button>
+          )}
+        </div>
+        {couponNotice ? (
+          <p
+            className={`text-xs font-bold ${
+              couponNotice.tone === "ok" ? "text-emerald-700" : "text-red-600"
+            }`}
+          >
+            {couponNotice.text}
+          </p>
+        ) : null}
+      </form>
+
       <button
         type="button"
         onClick={handleCheckout}
         disabled={isSubmitting}
-        className="mt-5 w-full rounded-full bg-[#ffd84d] px-5 py-4 text-sm font-black text-zinc-950 shadow-sm transition hover:bg-[#f2c230] disabled:cursor-not-allowed disabled:bg-zinc-300"
+        className="mt-3 w-full rounded-full bg-[#ffd84d] px-5 py-4 text-sm font-black text-zinc-950 shadow-sm transition hover:bg-[#f2c230] disabled:cursor-not-allowed disabled:bg-zinc-300"
       >
-        {isSubmitting ? "결제 진행 중..." : "결제하기"}
+        {isSubmitting
+          ? "결제 진행 중..."
+          : couponState
+            ? `${couponState.finalAmount.toLocaleString("ko-KR")}원 결제하기`
+            : "결제하기"}
       </button>
       {message ? <p className="mt-3 text-sm font-bold text-red-600">{message}</p> : null}
     </>

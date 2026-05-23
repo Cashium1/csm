@@ -7,6 +7,7 @@ type CourseSlugRow = {
   course_slug: string;
 };
 
+// 환불 처리되면 access_status='revoked'가 되며 더 이상 접근 불가.
 export function hasPurchasedCourse(userId: string, courseSlug: string) {
   const row = getDatabase()
     .prepare(`
@@ -14,6 +15,7 @@ export function hasPurchasedCourse(userId: string, courseSlug: string) {
       FROM course_purchases
       WHERE user_id = ?
         AND course_slug = ?
+        AND access_status = 'active'
       LIMIT 1
     `)
     .get(userId, courseSlug) as CourseSlugRow | undefined;
@@ -85,16 +87,36 @@ export function purchaseCourse(userId: string, courseSlug: string) {
         id,
         user_id,
         course_slug,
-        purchased_at
+        purchased_at,
+        access_status,
+        access_granted_at
       )
-      VALUES (?, ?, ?, ?)
-      ON CONFLICT(user_id, course_slug) DO NOTHING
+      VALUES (?, ?, ?, ?, 'active', ?)
+      ON CONFLICT(user_id, course_slug) DO UPDATE SET
+        access_status = 'active',
+        access_granted_at = excluded.access_granted_at,
+        access_revoked_at = NULL,
+        revoked_reason = NULL
     `)
-    .run(randomUUID(), userId, courseSlug, now);
+    .run(randomUUID(), userId, courseSlug, now, now);
 
   removeCourseFromCart(userId, courseSlug);
 
   return { ok: true as const };
+}
+
+// 환불 처리 시 수강권을 비활성화합니다.
+export function revokeCourseAccessForRefund(userId: string, courseSlug: string) {
+  getDatabase()
+    .prepare(`
+      UPDATE course_purchases
+      SET access_status = 'revoked',
+          access_revoked_at = ?,
+          revoked_reason = 'refund'
+      WHERE user_id = ?
+        AND course_slug = ?
+    `)
+    .run(new Date().toISOString(), userId, courseSlug);
 }
 
 export function getAccessibleCoursesForUser(userId: string) {
@@ -103,6 +125,7 @@ export function getAccessibleCoursesForUser(userId: string) {
       SELECT course_slug
       FROM course_purchases
       WHERE user_id = ?
+        AND access_status = 'active'
       ORDER BY purchased_at DESC
     `)
     .all(userId) as CourseSlugRow[];

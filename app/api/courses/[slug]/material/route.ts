@@ -36,6 +36,13 @@ export async function GET(request: NextRequest, { params }: MaterialRouteContext
     return NextResponse.json({ message: "로그인이 필요합니다." }, { status: 401 });
   }
 
+  if (user.status === "blocked" || user.status === "deleted") {
+    return NextResponse.json(
+      { message: "차단되었거나 사용할 수 없는 계정입니다." },
+      { status: 403 },
+    );
+  }
+
   if (!hasCourseAccess(user.id, slug)) {
     return NextResponse.json(
       { message: "수강 중인 강의만 자료를 확인할 수 있습니다." },

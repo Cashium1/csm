@@ -9,6 +9,7 @@ type HeaderUser = {
   email: string;
   name: string;
   createdAt: string;
+  role?: "user" | "admin";
 };
 
 type MeResponse = {
@@ -90,6 +91,16 @@ export function HeaderAuthControls() {
 
   return (
     <div className="flex min-w-0 items-center gap-2">
+      {user.role === "admin" ? (
+        <Link
+          href="/admin/dashboard"
+          title="관리자 콘솔"
+          className="inline-flex shrink-0 items-center gap-1.5 rounded-full border border-amber-300 bg-[#fff4c4] px-3 py-2 text-sm font-black text-[#8a5a00] transition hover:border-amber-400 hover:bg-[#ffe88a]"
+        >
+          <span aria-hidden="true">🛠</span>
+          관리자
+        </Link>
+      ) : null}
       <Link
         href="/mypage"
         title={user.name}

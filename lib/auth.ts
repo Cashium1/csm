@@ -1,13 +1,17 @@
 import { scryptSync, randomBytes, randomUUID, createHash, timingSafeEqual } from "node:crypto";
 import { cookies } from "next/headers";
+import { redirect } from "next/navigation";
 import type { NextRequest, NextResponse } from "next/server";
 import { getDatabase } from "@/lib/db";
+import { hasPermission, isAdminRole, type AppRole, type Permission } from "@/lib/permissions";
 
 export type PublicUser = {
   id: string;
   email: string;
   name: string;
   createdAt: string;
+  role: AppRole;
+  status: "active" | "blocked" | "deleted";
 };
 
 type UserRow = {
@@ -17,6 +21,8 @@ type UserRow = {
   password_salt: string;
   name: string;
   created_at: string;
+  role: string;
+  status: string;
 };
 
 type SessionUserRow = {
@@ -24,6 +30,8 @@ type SessionUserRow = {
   email: string;
   name: string;
   created_at: string;
+  role: string;
+  status: string;
 };
 
 type AuthFieldErrors = {
@@ -212,14 +220,42 @@ export function deleteUser(userId: string) {
   getDatabase().prepare(`DELETE FROM "USER" WHERE id = ?`).run(userId);
 }
 
-export function authenticateUser(email: string, password: string) {
+export type AuthenticateResult =
+  | { ok: true; user: PublicUser }
+  | { ok: false; reason: "invalid" | "blocked" | "deleted"; message: string };
+
+export function authenticateUser(email: string, password: string): AuthenticateResult {
   const user = findUserByEmail(email);
 
   if (!user || !verifyPassword(password, user.password_hash, user.password_salt)) {
-    return null;
+    return {
+      ok: false,
+      reason: "invalid",
+      message: "이메일 또는 비밀번호를 확인해 주세요.",
+    };
   }
 
-  return toPublicUser(user);
+  if (user.status === "blocked") {
+    return {
+      ok: false,
+      reason: "blocked",
+      message: "차단된 계정입니다. 관리자에게 문의해 주세요.",
+    };
+  }
+  if (user.status === "deleted") {
+    return {
+      ok: false,
+      reason: "deleted",
+      message: "탈퇴 처리된 계정입니다.",
+    };
+  }
+
+  // 마지막 로그인 시각 기록
+  getDatabase()
+    .prepare(`UPDATE "USER" SET last_login_at = ? WHERE id = ?`)
+    .run(new Date().toISOString(), user.id);
+
+  return { ok: true, user: toPublicUser(user) };
 }
 
 // 특정 사용자의 비밀번호가 맞는지 확인합니다. (회원정보 수정 전 본인 확인용)
@@ -277,7 +313,9 @@ export function getUserBySessionToken(token: string | undefined) {
         u.id,
         u.email,
         u.name,
-        u.created_at
+        u.created_at,
+        u.role,
+        u.status
       FROM user_sessions s
       INNER JOIN "USER" u ON u.id = s.user_id
       WHERE s.token_hash = ?
@@ -295,7 +333,19 @@ export function getUserBySessionToken(token: string | undefined) {
     email: row.email,
     name: row.name,
     createdAt: row.created_at,
+    role: normalizeRole(row.role),
+    status: normalizeStatus(row.status),
   };
+}
+
+function normalizeRole(r: string): AppRole {
+  return isAdminRole(r) ? r : "user";
+}
+
+function normalizeStatus(s: string): PublicUser["status"] {
+  if (s === "blocked") return "blocked";
+  if (s === "deleted") return "deleted";
+  return "active";
 }
 
 export async function getCurrentUser() {
@@ -309,6 +359,53 @@ export function getCurrentUserFromRequest(request: NextRequest) {
   const token = request.cookies.get(sessionCookieName)?.value;
 
   return getUserBySessionToken(token);
+}
+
+// 관리자 페이지 보호: 로그인 안 됐으면 /login으로, 일반 사용자면 /로 보냅니다.
+export async function requireAdmin(): Promise<PublicUser> {
+  const user = await getCurrentUser();
+
+  if (!user) {
+    redirect("/login");
+  }
+  if (!isAdminRole(user.role)) {
+    redirect("/");
+  }
+
+  return user;
+}
+
+// 특정 권한이 있는 관리자만 통과. 권한 없는 경우 권한 부족 안내로 보냅니다.
+export async function requirePermissionPage(permission: Permission): Promise<PublicUser> {
+  const user = await requireAdmin();
+  if (!hasPermission(user.role, permission)) {
+    redirect("/admin/no-access");
+  }
+  return user;
+}
+
+// 관리자 API 보호: 관리자 아니면 null 반환 → 라우트에서 403 응답.
+export function requireAdminFromRequest(request: NextRequest): PublicUser | null {
+  const user = getCurrentUserFromRequest(request);
+  if (!user || !isAdminRole(user.role)) {
+    return null;
+  }
+  return user;
+}
+
+// 특정 권한이 있는 관리자만 허용
+export function requirePermissionFromRequest(
+  request: NextRequest,
+  permission: Permission,
+): PublicUser | null {
+  const user = requireAdminFromRequest(request);
+  if (!user) return null;
+  if (!hasPermission(user.role, permission)) return null;
+  return user;
+}
+
+export function isAdmin(user: { role?: string } | null | undefined) {
+  return isAdminRole(user?.role ?? null);
 }
 
 export function attachSessionCookie(response: NextResponse, token: string) {
@@ -350,7 +447,9 @@ function findUserByEmail(email: string) {
         password_hash,
         password_salt,
         name,
-        created_at
+        created_at,
+        role,
+        status
       FROM "USER"
       WHERE email = ?
       LIMIT 1
@@ -390,5 +489,7 @@ function toPublicUser(user: UserRow): PublicUser {
     email: user.email,
     name: user.name,
     createdAt: user.created_at,
+    role: normalizeRole(user.role),
+    status: normalizeStatus(user.status),
   };
 }

@@ -68,6 +68,14 @@ export function createOrder(userId: string, courseSlug: string) {
     return { ok: false as const, message: "이미 보유 중인 강의입니다." };
   }
 
+  // 관리자가 비공개 또는 판매중지로 설정한 강의는 결제할 수 없습니다.
+  const flags = getDatabase()
+    .prepare(`SELECT is_published, is_on_sale FROM courses WHERE slug = ?`)
+    .get(courseSlug) as { is_published: number; is_on_sale: number } | undefined;
+  if (flags && (flags.is_published !== 1 || flags.is_on_sale !== 1)) {
+    return { ok: false as const, message: "현재 판매가 중지된 강의입니다." };
+  }
+
   const now = new Date().toISOString();
   const id = `order_${randomUUID()}`;
 
