@@ -1,6 +1,10 @@
 import { SectionHeading } from "@/components/section-heading";
 import { RecommendFlow } from "./recommend-flow";
 
+// 사이트 설정/푸터가 항상 최신 값으로 반영되도록 동적 렌더링합니다.
+export const runtime = "nodejs";
+export const dynamic = "force-dynamic";
+
 export default function RecommendPage() {
   return (
     <section className="bg-zinc-50 py-12 sm:py-16">

@@ -1,7 +1,11 @@
 import Link from "next/link";
 import { CourseCard } from "@/components/course-card";
 import { SectionHeading } from "@/components/section-heading";
-import { categoryGroups, courses } from "@/lib/data";
+import { categoryGroups } from "@/lib/data";
+import { listPublicCourses } from "@/lib/public-courses";
+
+export const runtime = "nodejs";
+export const dynamic = "force-dynamic";
 
 const reasonCards = [
   {
@@ -55,8 +59,10 @@ const faqs = [
 ];
 
 export default function Home() {
-  const featuredCourses = courses.slice(0, 3);
-  const representativeCategories = courses.slice(0, 6);
+  // 관리자가 수정한 강의 정보가 즉시 반영되도록 DB에서 공개 강의를 읽습니다.
+  const publicCourses = listPublicCourses();
+  const featuredCourses = publicCourses.slice(0, 3);
+  const representativeCategories = publicCourses.slice(0, 6);
 
   return (
     <>

@@ -5,8 +5,8 @@ import { CourseCard } from "@/components/course-card";
 import { getCurrentUser, isAdmin } from "@/lib/auth";
 import { hasCartedCourse } from "@/lib/course-library";
 import { getCourseReviews, getUserCourseReview } from "@/lib/course-reviews";
-import { courses, getCourse, getRelatedCourses } from "@/lib/data";
-import { getDatabase } from "@/lib/db";
+import { courses } from "@/lib/data";
+import { getPublicCourse, getRelatedPublicCourses } from "@/lib/public-courses";
 import { hasCourseAccess } from "@/lib/purchases";
 import { CourseActionButton } from "./course-action-button";
 import { CourseCartButton } from "./course-cart-button";
@@ -31,7 +31,7 @@ export function generateStaticParams() {
 
 export async function generateMetadata({ params }: CourseDetailPageProps) {
   const { slug } = await params;
-  const course = getCourse(slug);
+  const course = getPublicCourse(slug, { includeUnpublished: true });
 
   if (!course) {
     return {
@@ -47,23 +47,17 @@ export async function generateMetadata({ params }: CourseDetailPageProps) {
 
 export default async function CourseDetailPage({ params }: CourseDetailPageProps) {
   const { slug } = await params;
-  const course = getCourse(slug);
+  const user = await getCurrentUser();
+
+  // 관리자는 비공개 강의도 미리보기로 볼 수 있고, 일반 사용자는 공개된 강의만 봅니다.
+  // DB의 admin-edited 값(제목/요약/가격 등)이 적용된 결과가 반환됩니다.
+  const course = getPublicCourse(slug, { includeUnpublished: isAdmin(user) });
 
   if (!course) {
     notFound();
   }
 
-  const user = await getCurrentUser();
-
-  // 관리자가 비공개로 설정한 강의는 공개 페이지에서 숨깁니다. (관리자는 미리보기 가능)
-  const publishedRow = getDatabase()
-    .prepare(`SELECT is_published FROM courses WHERE slug = ?`)
-    .get(slug) as { is_published: number } | undefined;
-  if (publishedRow && publishedRow.is_published === 0 && !isAdmin(user)) {
-    notFound();
-  }
-
-  const relatedCourses = getRelatedCourses(course.relatedSlugs);
+  const relatedCourses = getRelatedPublicCourses(course.relatedSlugs);
   const hasAccess = user ? hasCourseAccess(user.id, slug) : false;
   const isCarted = user ? hasCartedCourse(user.id, slug) : false;
   const isFree = course.priceNumber === 0;
