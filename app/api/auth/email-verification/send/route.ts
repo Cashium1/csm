@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { isEmailTaken } from "@/lib/auth";
 import { isEmailDeliveryConfigured } from "@/lib/email";
 import { issueVerificationCode, sendVerificationCodeEmail } from "@/lib/email-verification";
+import { getClientIp, rateLimit } from "@/lib/rate-limit";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -15,6 +16,19 @@ export async function POST(request: NextRequest) {
 
   if (!emailPattern.test(email)) {
     return NextResponse.json({ message: "올바른 이메일을 입력해 주세요." }, { status: 400 });
+  }
+
+  // 메일 폭탄/발송 비용 남용 방지: 같은 IP에서 10분간 5회까지만 발송 허용.
+  // (이메일당 60초 재발송 쿨다운은 issueVerificationCode 내부에서 별도로 적용됩니다.)
+  const limited = rateLimit(`verify-send:${getClientIp(request)}`, {
+    limit: 5,
+    windowMs: 10 * 60 * 1000,
+  });
+  if (!limited.ok) {
+    return NextResponse.json(
+      { message: `요청이 너무 많습니다. ${limited.retryAfterSeconds}초 후 다시 시도해 주세요.` },
+      { status: 429, headers: { "Retry-After": String(limited.retryAfterSeconds) } },
+    );
   }
 
   if (isEmailTaken(email)) {

@@ -307,6 +307,16 @@ export function recordCouponUsage(input: {
 }) {
   const now = new Date().toISOString();
   const db = getDatabase();
+
+  // 멱등 처리: 같은 주문에 대해 쿠폰 사용이 이미 기록됐다면 중복 차감하지 않습니다.
+  // (결제 성공 페이지 새로고침/재진입으로 두 번 호출되어도 안전)
+  const already = db
+    .prepare(`SELECT 1 FROM coupon_usages WHERE order_id = ? LIMIT 1`)
+    .get(input.orderId);
+  if (already) {
+    return;
+  }
+
   db
     .prepare(
       `INSERT INTO coupon_usages (id, coupon_id, coupon_code, user_id, course_id, order_id, discount_amount, used_at)

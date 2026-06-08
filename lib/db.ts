@@ -4,11 +4,17 @@ import path from "node:path";
 import { DatabaseSync } from "node:sqlite";
 import { notices as defaultNotices } from "@/lib/data";
 
-const databaseDir = path.join(process.cwd(), "data");
+// 데이터 디렉터리는 DATA_DIR 환경변수로 바꿀 수 있습니다.
+// (영속 볼륨이 있는 서버에 배포할 때 마운트 경로를 지정하기 위함. 미설정 시 ./data)
+const databaseDir = process.env.DATA_DIR
+  ? path.resolve(process.env.DATA_DIR)
+  : path.join(process.cwd(), "data");
 const databasePath = path.join(databaseDir, "cashoom.sqlite");
 
 type GlobalWithDatabase = typeof globalThis & {
   __cashoomDatabase?: DatabaseSync;
+  // 스키마 초기화/마이그레이션/시드가 이 연결에서 이미 수행됐는지 표시합니다.
+  __cashoomDatabaseReady?: boolean;
 };
 
 export function getDatabase() {
@@ -22,12 +28,19 @@ export function getDatabase() {
     database.exec("PRAGMA journal_mode = WAL;");
 
     globalForDatabase.__cashoomDatabase = database;
+    globalForDatabase.__cashoomDatabaseReady = false;
   }
 
   const database = globalForDatabase.__cashoomDatabase;
-  initializeSchema(database);
-  migrateSchema(database);
-  seedDatabase(database);
+
+  // 초기화/마이그레이션/시드는 연결당 1회만 수행합니다.
+  // (getDatabase는 요청마다 여러 번 호출되므로 매번 재실행하면 불필요한 부하가 큽니다.)
+  if (!globalForDatabase.__cashoomDatabaseReady) {
+    initializeSchema(database);
+    migrateSchema(database);
+    seedDatabase(database);
+    globalForDatabase.__cashoomDatabaseReady = true;
+  }
 
   return database;
 }
@@ -440,6 +453,13 @@ function migrateSchema(database: DatabaseSync) {
   ensureColumn("orders", "refund_requested_at", "TEXT");
   ensureColumn("orders", "refunded_at", "TEXT");
   ensureColumn("orders", "admin_memo", "TEXT");
+
+  // 결제내역에 실제 할인/쿠폰 정보를 표시하기 위한 컬럼들
+  // original_amount: 할인 전 금액, amount: 실제 결제(할인 적용) 금액
+  ensureColumn("orders", "original_amount", "INTEGER");
+  ensureColumn("orders", "discount_amount", "INTEGER NOT NULL DEFAULT 0");
+  ensureColumn("orders", "coupon_id", "TEXT");
+  ensureColumn("orders", "coupon_code", "TEXT");
 
   ensureColumn("course_purchases", "access_status", "TEXT NOT NULL DEFAULT 'active'");
   ensureColumn("course_purchases", "access_granted_at", "TEXT");

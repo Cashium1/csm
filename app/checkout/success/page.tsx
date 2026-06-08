@@ -1,7 +1,15 @@
 import Link from "next/link";
 import { getCurrentUser } from "@/lib/auth";
+import { recordCouponUsage } from "@/lib/coupons";
 import { getCourse } from "@/lib/data";
-import { getOrderById, markOrderFailed, markOrderPaid, type Order } from "@/lib/orders";
+import { notifyPaymentCompleted } from "@/lib/notifications";
+import {
+  getOrderById,
+  getOrderCoupon,
+  markOrderFailed,
+  markOrderPaid,
+  type Order,
+} from "@/lib/orders";
 import { purchaseCourse } from "@/lib/purchases";
 import { confirmTossPayment } from "@/lib/toss";
 
@@ -60,15 +68,38 @@ async function processConfirmation(
     return { status: "error", message: confirmation.message, order };
   }
 
-  markOrderPaid(orderId, {
+  // 'pending' → 'paid' 전이가 실제로 일어났을 때만 후속 처리를 1회 수행합니다.
+  // (동시 요청/새로고침으로 중복 호출돼도 수강권 부여·쿠폰 차감이 한 번만 일어나도록)
+  const transitioned = markOrderPaid(orderId, {
     paymentKey,
     method: confirmation.payment.method ?? "",
     receiptUrl: confirmation.payment.receipt?.url ?? "",
     approvedAt: confirmation.payment.approvedAt ?? new Date().toISOString(),
   });
 
-  // 강의 수강 권한을 부여합니다.
-  purchaseCourse(user.id, order.courseSlug);
+  if (transitioned) {
+    // 강의 수강 권한을 부여합니다.
+    purchaseCourse(user.id, order.courseSlug);
+
+    // 결제에 쿠폰이 적용됐다면 이 시점에 사용량을 차감합니다.
+    const coupon = getOrderCoupon(orderId);
+    if (coupon) {
+      recordCouponUsage({
+        couponId: coupon.couponId,
+        couponCode: coupon.couponCode,
+        userId: user.id,
+        courseId: order.courseSlug,
+        orderId,
+        discountAmount: coupon.discountAmount,
+      });
+    }
+
+    // 결제 완료 안내(사용자) + 신규 결제 알림(관리자). 실패해도 결제 처리에는 영향 없음.
+    await notifyPaymentCompleted(
+      { name: user.name, email: user.email },
+      { id: order.id, orderName: order.orderName, amount: order.amount },
+    );
+  }
 
   return { status: "success", order: getOrderById(orderId) ?? order };
 }

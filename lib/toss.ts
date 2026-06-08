@@ -30,10 +30,14 @@ type CancelResult =
   | { ok: true; mocked: boolean; payment?: TossPaymentResult }
   | { ok: false; code: string; message: string };
 
-// 운영 환경에서만 실제 토스 API를 호출합니다. (TOSS_SECRET_KEY가 있어야 함)
-// 키가 없거나 TOSS_MOCK=1이면 mock 응답을 반환합니다.
+// mock 환불을 사용해야 하는지 판단합니다.
+// - TOSS_MOCK=1 이면 항상 mock (개발/테스트용)
+// - 운영(production)에서는 키가 없어도 mock으로 "성공" 처리하지 않습니다.
+//   (실제로는 환불이 안 됐는데 완료된 것처럼 보이는 사고를 막기 위함)
+// - 개발 환경에서는 키가 없으면 mock으로 대체합니다.
 export function shouldMockTossRefund(): boolean {
   if (process.env.TOSS_MOCK === "1") return true;
+  if (process.env.NODE_ENV === "production") return false;
   return !process.env.TOSS_SECRET_KEY;
 }
 
@@ -46,7 +50,15 @@ export async function cancelTossPayment(input: {
     return { ok: true, mocked: true };
   }
 
-  const secretKey = process.env.TOSS_SECRET_KEY!;
+  const secretKey = process.env.TOSS_SECRET_KEY;
+  // 운영 환경에서 키가 없으면 mock으로 넘어가지 않고 명확한 실패를 반환합니다.
+  if (!secretKey) {
+    return {
+      ok: false,
+      code: "NOT_CONFIGURED",
+      message: "토스 시크릿 키(TOSS_SECRET_KEY)가 설정되지 않아 환불을 실행할 수 없습니다.",
+    };
+  }
   const authorization = `Basic ${Buffer.from(`${secretKey}:`).toString("base64")}`;
   try {
     const response = await fetch(

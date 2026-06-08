@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getCurrentUserFromRequest } from "@/lib/auth";
 import { getCourse } from "@/lib/data";
+import { notifyNewReview } from "@/lib/notifications";
 import { hasCourseAccess } from "@/lib/purchases";
 import { upsertCourseReview, validateReviewFields } from "@/lib/course-reviews";
 
@@ -42,6 +43,9 @@ export async function POST(request: NextRequest, { params }: ReviewRouteContext)
     rating,
     content,
   });
+
+  // 관리자에게 새 리뷰 등록 알림 (실패해도 리뷰 등록에는 영향 없음)
+  await notifyNewReview({ userName: user.name, courseTitle: course.title });
 
   return NextResponse.json({ review }, { status: 201 });
 }

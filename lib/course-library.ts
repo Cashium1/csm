@@ -34,6 +34,7 @@ type CartRow = CourseRow & {
 type PaymentRow = CourseRow & {
   payment_id: string;
   purchased_at: string;
+  paid_amount: number;
 };
 
 type SlugRow = {
@@ -299,23 +300,30 @@ export function getCompletedCoursesForUser(userId: string) {
 export function getPaymentHistoryForUser(userId: string) {
   syncCoursesToDatabase();
 
+  // 결제 내역은 실제 주문(orders)에서 가져옵니다. id는 주문 id로, 결제 상세 페이지
+  // (/mypage/payments/[paymentId])의 조회 키와 일치해야 상세보기 링크가 동작합니다.
   const rows = getDatabase()
     .prepare(`
       SELECT
         c.*,
-        cp.id AS payment_id,
-        cp.purchased_at
-      FROM course_purchases cp
-      INNER JOIN courses c ON c.slug = cp.course_slug
-      WHERE cp.user_id = ?
-      ORDER BY cp.purchased_at DESC
+        o.id AS payment_id,
+        COALESCE(o.approved_at, o.created_at) AS purchased_at,
+        o.amount AS paid_amount
+      FROM orders o
+      INNER JOIN courses c ON c.slug = o.course_slug
+      WHERE o.user_id = ?
+        AND o.status IN ('paid', 'refund_requested', 'refunded')
+      ORDER BY purchased_at DESC
     `)
     .all(userId) as PaymentRow[];
 
   return rows
     .map((row): PaymentHistoryItem | null => {
       const course = rowToCourse(row);
-      return course ? { ...course, id: row.payment_id, purchasedAt: row.purchased_at } : null;
+      if (!course) return null;
+      // 카탈로그 가격이 아닌 실제 결제 금액을 표시합니다.
+      const price = `${row.paid_amount.toLocaleString("ko-KR")}원`;
+      return { ...course, price, id: row.payment_id, purchasedAt: row.purchased_at };
     })
     .filter((item): item is PaymentHistoryItem => item !== null);
 }

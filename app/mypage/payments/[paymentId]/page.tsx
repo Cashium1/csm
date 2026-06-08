@@ -115,7 +115,7 @@ export default async function PaymentDetailPage({ params }: PaymentDetailPagePro
                   <p className="mt-1 text-sm leading-6 text-zinc-600">
                     이 결제 건은 환불 요청이 가능합니다.
                   </p>
-                  <RefundRequestButton />
+                  <RefundRequestButton paymentId={payment.id} />
                 </>
               ) : (
                 <p className="mt-1 text-sm leading-6 text-zinc-600">

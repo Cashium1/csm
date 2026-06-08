@@ -82,15 +82,58 @@ export function createOrder(userId: string, courseSlug: string) {
   getDatabase()
     .prepare(`
       INSERT INTO orders (
-        id, user_id, course_slug, order_name, amount, status, created_at, updated_at
+        id, user_id, course_slug, order_name, amount, original_amount, discount_amount,
+        status, created_at, updated_at
       )
-      VALUES (?, ?, ?, ?, ?, 'pending', ?, ?)
+      VALUES (?, ?, ?, ?, ?, ?, 0, 'pending', ?, ?)
     `)
-    .run(id, userId, courseSlug, course.title, course.priceNumber, now, now);
+    .run(id, userId, courseSlug, course.title, course.priceNumber, course.priceNumber, now, now);
 
   return {
     ok: true as const,
     order: { id, amount: course.priceNumber, orderName: course.title, courseSlug },
+  };
+}
+
+// 쿠폰 적용 정보를 주문에 저장합니다. (사용량 차감은 결제 성공 시점에 별도로 처리)
+export function applyCouponToOrder(
+  orderId: string,
+  input: { couponId: string; couponCode: string; discountAmount: number; finalAmount: number },
+) {
+  getDatabase()
+    .prepare(`
+      UPDATE orders
+      SET amount = ?,
+          discount_amount = ?,
+          coupon_id = ?,
+          coupon_code = ?,
+          updated_at = ?
+      WHERE id = ?
+    `)
+    .run(
+      input.finalAmount,
+      input.discountAmount,
+      input.couponId,
+      input.couponCode,
+      new Date().toISOString(),
+      orderId,
+    );
+}
+
+// 결제에 적용된 쿠폰 정보를 조회합니다. (결제 성공 후 사용량 기록용)
+export function getOrderCoupon(
+  orderId: string,
+): { couponId: string; couponCode: string; discountAmount: number } | null {
+  const row = getDatabase()
+    .prepare(`SELECT coupon_id, coupon_code, discount_amount FROM orders WHERE id = ?`)
+    .get(orderId) as
+    | { coupon_id: string | null; coupon_code: string | null; discount_amount: number | null }
+    | undefined;
+  if (!row || !row.coupon_id) return null;
+  return {
+    couponId: row.coupon_id,
+    couponCode: row.coupon_code ?? "",
+    discountAmount: row.discount_amount ?? 0,
   };
 }
 
@@ -103,11 +146,13 @@ export function getOrderById(orderId: string): Order | null {
 }
 
 // 결제 승인 성공 시 주문 상태를 '결제 완료'로 갱신합니다.
+// 'pending' 상태일 때만 전이하며, 실제로 전이됐는지(true) 여부를 반환합니다.
+// 새로고침/동시 요청 등으로 이미 paid가 된 경우 false를 반환해 후속 처리(쿠폰 차감 등)의 중복을 막습니다.
 export function markOrderPaid(
   orderId: string,
   payment: { paymentKey: string; method: string; receiptUrl: string; approvedAt: string },
-) {
-  getDatabase()
+): boolean {
+  const result = getDatabase()
     .prepare(`
       UPDATE orders
       SET status = 'paid',
@@ -117,7 +162,7 @@ export function markOrderPaid(
           approved_at = ?,
           fail_reason = NULL,
           updated_at = ?
-      WHERE id = ?
+      WHERE id = ? AND status = 'pending'
     `)
     .run(
       payment.paymentKey,
@@ -127,6 +172,60 @@ export function markOrderPaid(
       new Date().toISOString(),
       orderId,
     );
+
+  return result.changes > 0;
+}
+
+// 사용자가 본인 주문에 대해 환불을 요청합니다.
+// 'paid' 상태일 때만 'refund_requested'로 전이하며, 관리자 환불 대기열/대시보드에 노출됩니다.
+export type RefundRequestResult =
+  | { ok: true; order: { id: string; orderName: string; courseSlug: string; amount: number } }
+  | { ok: false; message: string };
+
+export function requestRefundByUser(
+  userId: string,
+  orderId: string,
+  reason: string,
+): RefundRequestResult {
+  const order = getOrderById(orderId);
+
+  if (!order || order.userId !== userId) {
+    return { ok: false, message: "환불할 주문을 찾을 수 없습니다." };
+  }
+  if (order.status !== "paid") {
+    return { ok: false, message: "환불을 요청할 수 없는 주문 상태입니다." };
+  }
+
+  const trimmedReason = reason.trim().slice(0, 500);
+  const now = new Date().toISOString();
+
+  // 동시 요청 방지를 위해 status='paid' 조건으로 원자적 전이합니다.
+  const result = getDatabase()
+    .prepare(`
+      UPDATE orders
+      SET status = 'refund_requested',
+          refund_status = 'requested',
+          refund_reason = ?,
+          refund_amount = amount,
+          refund_requested_at = ?,
+          updated_at = ?
+      WHERE id = ? AND status = 'paid'
+    `)
+    .run(trimmedReason || null, now, now, orderId);
+
+  if (result.changes === 0) {
+    return { ok: false, message: "이미 환불이 진행 중이거나 환불할 수 없는 주문입니다." };
+  }
+
+  return {
+    ok: true,
+    order: {
+      id: order.id,
+      orderName: order.orderName,
+      courseSlug: order.courseSlug,
+      amount: order.amount,
+    },
+  };
 }
 
 // 결제 실패 시 주문 상태를 '실패'로 갱신합니다. (이미 결제 완료된 주문은 건드리지 않음)

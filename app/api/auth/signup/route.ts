@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { attachSessionCookie, createSession, createUser, validateSignupFields } from "@/lib/auth";
 import { clearVerifications, isEmailVerified } from "@/lib/email-verification";
+import { notifySignup } from "@/lib/notifications";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -33,6 +34,9 @@ export async function POST(request: NextRequest) {
 
   // 가입 완료 후 사용한 인증 기록을 정리합니다.
   clearVerifications(email);
+
+  // 가입 환영 + 관리자 신규가입 알림 (실패해도 가입은 정상 처리)
+  await notifySignup({ name: result.user.name, email: result.user.email });
 
   const token = createSession(result.user.id);
   const response = NextResponse.json({ user: result.user }, { status: 201 });

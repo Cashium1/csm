@@ -5,6 +5,7 @@ import {
   getInProgressCoursesForUser,
   getPaymentHistoryForUser,
 } from "@/lib/course-library";
+import { listInquiriesForUser } from "@/lib/admin-extra";
 import { getCurrentUser } from "@/lib/auth";
 import { LogoutButton } from "./logout-button";
 import { MyPageContent } from "./mypage-content";
@@ -23,6 +24,17 @@ export default async function MyPage() {
   const inProgressCourses = getInProgressCoursesForUser(user.id);
   const completedCourses = getCompletedCoursesForUser(user.id);
   const paymentHistory = getPaymentHistoryForUser(user.id);
+  // 본인 문의 내역 (클라이언트로 직렬화 가능한 형태로 추림)
+  const inquiries = listInquiriesForUser(user.id).map((inquiry) => ({
+    id: inquiry.id,
+    title: inquiry.title,
+    content: inquiry.content,
+    type: inquiry.type,
+    status: inquiry.status,
+    answer: inquiry.answer,
+    answeredAt: inquiry.answeredAt,
+    createdAt: inquiry.createdAt,
+  }));
 
   return (
     <section className="bg-zinc-50 py-12 sm:py-16">
@@ -44,6 +56,7 @@ export default async function MyPage() {
           inProgressCourses={inProgressCourses}
           completedCourses={completedCourses}
           paymentHistory={paymentHistory}
+          inquiries={inquiries}
         />
       </div>
     </section>

@@ -11,7 +11,26 @@ import type {
 import { CartCourseActions, LearningCourseActions } from "./course-list-actions";
 import { ProfileSection } from "./profile-section";
 
-type TabKey = "library" | "payments" | "profile";
+type TabKey = "library" | "payments" | "inquiries" | "profile";
+
+export type MyInquiry = {
+  id: string;
+  title: string;
+  content: string;
+  type: string;
+  status: "pending" | "answered";
+  answer: string | null;
+  answeredAt: string | null;
+  createdAt: string;
+};
+
+const INQUIRY_TYPE_LABEL: Record<string, string> = {
+  course: "강의 문의",
+  payment: "결제 문의",
+  refund: "환불 문의",
+  account: "계정 문의",
+  general: "기타 문의",
+};
 
 type MyPageContentProps = {
   user: { name: string; email: string; createdAt: string };
@@ -19,6 +38,7 @@ type MyPageContentProps = {
   inProgressCourses: CourseListItem[];
   completedCourses: CourseListItem[];
   paymentHistory: PaymentHistoryItem[];
+  inquiries: MyInquiry[];
 };
 
 const dateFormatter = new Intl.DateTimeFormat("ko-KR", {
@@ -30,6 +50,7 @@ const dateFormatter = new Intl.DateTimeFormat("ko-KR", {
 const tabs: { key: TabKey; label: string }[] = [
   { key: "library", label: "강의 목록" },
   { key: "payments", label: "결제 내역" },
+  { key: "inquiries", label: "내 문의" },
   { key: "profile", label: "회원 정보" },
 ];
 
@@ -39,12 +60,14 @@ export function MyPageContent({
   inProgressCourses,
   completedCourses,
   paymentHistory,
+  inquiries,
 }: MyPageContentProps) {
   const [activeTab, setActiveTab] = useState<TabKey>("library");
 
   const tabCounts: Record<TabKey, number | undefined> = {
     library: cartCourses.length + inProgressCourses.length + completedCourses.length,
     payments: paymentHistory.length,
+    inquiries: inquiries.length,
     profile: undefined,
   };
 
@@ -73,6 +96,7 @@ export function MyPageContent({
           />
         ) : null}
         {activeTab === "payments" ? <PaymentsSection paymentHistory={paymentHistory} /> : null}
+        {activeTab === "inquiries" ? <InquiriesSection inquiries={inquiries} /> : null}
         {activeTab === "profile" ? <ProfileSection user={user} /> : null}
       </main>
     </div>
@@ -232,6 +256,74 @@ function PaymentsSection({ paymentHistory }: { paymentHistory: PaymentHistoryIte
         )}
       </div>
     </section>
+  );
+}
+
+function InquiriesSection({ inquiries }: { inquiries: MyInquiry[] }) {
+  return (
+    <section className="rounded-lg border border-zinc-200 bg-white p-5 shadow-sm">
+      <div className="flex flex-col gap-2 border-b border-zinc-100 pb-5 sm:flex-row sm:items-end sm:justify-between">
+        <div>
+          <p className="text-sm font-extrabold text-[#b77900]">INQUIRIES</p>
+          <h2 className="mt-2 text-2xl font-black text-zinc-950">내 문의</h2>
+        </div>
+        <Link
+          href="/contact"
+          className="inline-flex rounded-full border border-zinc-300 px-4 py-2 text-sm font-extrabold text-zinc-700 transition hover:border-zinc-950"
+        >
+          새 문의하기
+        </Link>
+      </div>
+      {inquiries.length ? (
+        <ul className="mt-4 space-y-4">
+          {inquiries.map((inquiry) => (
+            <InquiryItem key={inquiry.id} inquiry={inquiry} />
+          ))}
+        </ul>
+      ) : (
+        <div className="mt-2">
+          <EmptyState text="등록한 문의가 없습니다." />
+        </div>
+      )}
+    </section>
+  );
+}
+
+function InquiryItem({ inquiry }: { inquiry: MyInquiry }) {
+  const answered = inquiry.status === "answered";
+  return (
+    <li className="rounded-xl border border-zinc-200 p-4 sm:p-5">
+      <div className="flex flex-wrap items-center gap-2">
+        <span className="rounded-full bg-zinc-100 px-2.5 py-1 text-xs font-extrabold text-zinc-600">
+          {INQUIRY_TYPE_LABEL[inquiry.type] ?? "기타 문의"}
+        </span>
+        <span
+          className={`rounded-full px-2.5 py-1 text-xs font-extrabold ${
+            answered ? "bg-emerald-50 text-emerald-700" : "bg-amber-50 text-amber-700"
+          }`}
+        >
+          {answered ? "답변완료" : "답변대기"}
+        </span>
+        <span className="ml-auto text-xs font-bold text-zinc-400">
+          {dateFormatter.format(new Date(inquiry.createdAt))}
+        </span>
+      </div>
+      <h3 className="mt-3 text-base font-black text-zinc-950">{inquiry.title}</h3>
+      <p className="mt-1.5 whitespace-pre-wrap text-sm leading-6 text-zinc-600">{inquiry.content}</p>
+      {answered && inquiry.answer ? (
+        <div className="mt-4 rounded-lg bg-[#fff9e6] p-4">
+          <p className="text-xs font-extrabold text-[#b77900]">답변</p>
+          <p className="mt-1.5 whitespace-pre-wrap text-sm leading-6 text-zinc-800">
+            {inquiry.answer}
+          </p>
+          {inquiry.answeredAt ? (
+            <p className="mt-2 text-xs font-bold text-zinc-400">
+              {dateFormatter.format(new Date(inquiry.answeredAt))} 답변
+            </p>
+          ) : null}
+        </div>
+      ) : null}
+    </li>
   );
 }
 

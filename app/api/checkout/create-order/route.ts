@@ -1,9 +1,8 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getCurrentUserFromRequest } from "@/lib/auth";
-import { createOrder } from "@/lib/orders";
+import { applyCouponToOrder, createOrder } from "@/lib/orders";
 import { isTossConfigured } from "@/lib/toss";
-import { validateCoupon, recordCouponUsage } from "@/lib/coupons";
-import { getDatabase } from "@/lib/db";
+import { validateCoupon } from "@/lib/coupons";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -74,25 +73,13 @@ export async function POST(request: NextRequest) {
       discountAmount: couponResult.discountAmount,
     };
 
-    // 주문 금액을 쿠폰 적용가로 갱신 + 메모에 쿠폰 정보 저장
-    getDatabase()
-      .prepare(
-        `UPDATE orders SET amount = ?, admin_memo = COALESCE(admin_memo, '') || ?, updated_at = ? WHERE id = ?`,
-      )
-      .run(
-        finalAmount,
-        `[쿠폰] ${appliedCoupon.code} (-${appliedCoupon.discountAmount.toLocaleString("ko-KR")}원)\n`,
-        new Date().toISOString(),
-        result.order.id,
-      );
-
-    recordCouponUsage({
+    // 주문에 쿠폰 적용 정보만 저장합니다. 실제 사용량 차감(used_count/사용 기록)은
+    // 결제가 성공한 시점에서 수행합니다. (결제 미완료/이탈 시 쿠폰이 소진되는 문제 방지)
+    applyCouponToOrder(result.order.id, {
       couponId: appliedCoupon.id,
       couponCode: appliedCoupon.code,
-      userId: user.id,
-      courseId: courseSlug,
-      orderId: result.order.id,
       discountAmount: appliedCoupon.discountAmount,
+      finalAmount,
     });
   }
 
