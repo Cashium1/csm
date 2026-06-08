@@ -1,36 +1,134 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# 캐쉬움 (CSM)
 
-## Getting Started
+부업 추천 · 강의 판매 플랫폼입니다. (Next.js 기반 웹사이트)
 
-First, run the development server:
+이 문서는 **개발 경험이 없어도** 내 컴퓨터에서 이 웹사이트를 직접 띄워볼 수 있도록 안내합니다.
+순서대로 천천히 따라 하시면 됩니다. (실제 인터넷에 배포하는 방법은 [DEPLOYMENT.md](DEPLOYMENT.md) 참고)
+
+---
+
+## 0. 이게 어떤 프로그램인가요?
+
+- 강의를 보여주고, 결제하고, 회원·문의·환불을 관리하는 웹사이트입니다.
+- 내 컴퓨터에서 실행하면 `http://localhost:3000` 주소로 브라우저에서 열어볼 수 있습니다.
+- "터미널(명령어 입력 창)"에 몇 줄을 입력하는 작업이 필요합니다. 무서워하지 마세요. 복사 → 붙여넣기 → 엔터면 됩니다.
+
+---
+
+## 1. 준비물 설치 (처음 한 번만)
+
+### ① Node.js 설치 — 이 프로그램을 실행하는 엔진
+1. https://nodejs.org 접속.
+2. **"LTS" 버전이 아니라 22.5 이상**이 필요합니다. 보통 화면에 보이는 최신 버전(예: 22.x 또는 24.x)을 받으면 됩니다.
+   > 이 프로젝트는 Node에 내장된 데이터베이스 기능(`node:sqlite`)을 쓰기 때문에 **Node 22.5 버전 이상**이어야 합니다.
+3. 내려받은 설치 파일을 실행하고 "다음 → 다음"으로 설치를 끝냅니다.
+
+### ② 설치가 잘 됐는지 확인
+- **Windows**: 시작 메뉴에서 `PowerShell` 검색 → 실행.
+- **Mac**: `터미널(Terminal)` 실행.
+
+그 창에 아래를 입력하고 엔터:
+```bash
+node -v
+```
+`v22.5.0` 처럼 숫자가 나오면 성공입니다. (앞 숫자가 22 이상이어야 함)
+
+---
+
+## 2. 프로젝트 폴더로 이동하기
+
+터미널에서 이 프로젝트가 있는 폴더로 이동합니다. (폴더 경로는 본인 컴퓨터에 맞게)
+
+```bash
+cd "C:\Users\foxes\LYS\CSM\csm"
+```
+> 💡 팁: 윈도우 탐색기에서 프로젝트 폴더를 연 뒤, 주소창에 `powershell` 을 입력하고 엔터하면 그 폴더에서 터미널이 바로 열립니다.
+
+---
+
+## 3. 필요한 부품 내려받기 (처음 한 번, 그리고 코드 받을 때마다)
+
+```bash
+npm install
+```
+- 인터넷에서 프로그램이 쓰는 부품들을 자동으로 내려받습니다. 1~3분 걸릴 수 있습니다.
+- 끝나면 다시 입력할 수 있는 상태로 돌아옵니다.
+
+---
+
+## 4. 설정값(키) 넣기 — 결제·이메일을 쓰려면 필요
+
+결제(토스페이먼츠)와 이메일(Resend) 같은 외부 기능은 **키(비밀번호 같은 값)** 가 있어야 동작합니다.
+
+1. 프로젝트 폴더에 있는 `.env.example` 파일을 복사해 `.env.local` 이라는 이름의 파일을 만듭니다.
+   ```bash
+   # Windows(PowerShell)
+   Copy-Item .env.example .env.local
+
+   # Mac
+   cp .env.example .env.local
+   ```
+2. `.env.local` 파일을 메모장이나 편집기로 열어, 발급받은 키 값을 채웁니다.
+   - 어떤 키를 어디서 받아 넣는지는 [DEPLOYMENT.md](DEPLOYMENT.md) 에 자세히 정리돼 있습니다.
+
+> 🔰 **키 없이 일단 화면만 보고 싶다면** 이 단계를 건너뛰어도 됩니다.
+> 키가 없으면 결제·실제 메일 발송만 동작하지 않고, 나머지 화면은 정상적으로 열립니다.
+> (이메일은 실제로 보내지 않고 터미널 창에 내용이 출력됩니다.)
+
+---
+
+## 5. 웹사이트 실행하기 ▶
 
 ```bash
 npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
 ```
+- 잠시 뒤 터미널에 `Local: http://localhost:3000` 같은 줄이 나타납니다.
+- 브라우저(크롬 등)를 열고 주소창에 **`http://localhost:3000`** 을 입력하면 사이트가 보입니다.
+- 코드를 수정하면 화면이 자동으로 새로고침됩니다.
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+### 끄는 방법
+- 실행 중인 터미널 창에서 **`Ctrl + C`** 를 누르면 멈춥니다.
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+---
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+## 6. 관리자 페이지 들어가기
 
-## Learn More
+1. `.env.local` 파일의 `ADMIN_EMAILS` 항목에 본인이 쓸 이메일을 적습니다. (예: `ADMIN_EMAILS=admin@example.com`)
+2. 사이트에서 **그 이메일로 회원가입**을 합니다.
+3. 가입하면 자동으로 관리자가 되어 **`http://localhost:3000/admin`** 에 들어갈 수 있습니다.
+   - 강의·회원·결제·문의·쿠폰 등을 여기서 관리합니다.
 
-To learn more about Next.js, take a look at the following resources:
+---
 
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
+## 자주 쓰는 명령어 정리
 
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
+| 하고 싶은 것 | 입력할 명령어 |
+|---|---|
+| 부품 내려받기(처음/업데이트 시) | `npm install` |
+| 개발 모드로 실행(평소 사용) | `npm run dev` |
+| 실제 배포용으로 빌드(점검용) | `npm run build` |
+| 빌드한 결과를 실행 | `npm run start` |
+| 코드 문법 검사 | `npm run lint` |
 
-## Deploy on Vercel
+---
 
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
+## 문제가 생겼을 때
 
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+- **`node` 또는 `npm` 명령어를 못 찾는다고 나와요**
+  → Node.js 설치가 안 됐거나, 터미널을 껐다 다시 켜야 합니다. (1단계 다시 확인)
+
+- **`http://localhost:3000` 이 안 열려요**
+  → `npm run dev` 가 실행 중인지, 터미널에 빨간 오류가 없는지 확인하세요. 다른 프로그램이 3000 포트를 쓰면 자동으로 3001 등 다른 번호로 열릴 수 있으니 터미널에 표시된 주소를 확인하세요.
+
+- **터미널에 `[env] 필수 환경변수 누락` 경고가 떠요**
+  → 결제 키 등이 비어 있다는 뜻입니다. 4단계의 `.env.local` 에 값을 넣으면 사라집니다. (화면 구경만 할 거면 무시해도 됩니다.)
+
+- **`Node 22.5` 관련 오류가 나요**
+  → Node 버전이 낮습니다. https://nodejs.org 에서 최신 버전을 다시 설치하세요. (`node -v` 로 확인)
+
+---
+
+## 더 알아보기
+
+- 실제 인터넷 배포 + 키 발급/삽입 방법: **[DEPLOYMENT.md](DEPLOYMENT.md)**
+- 환경변수(키) 목록과 설명: **[.env.example](.env.example)**
